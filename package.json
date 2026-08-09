@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "main": "src/server.js",
   "description": "Minimal reproduction of the ChatGPT fullscreen composer viewport bug.",
   "engines": {
     "node": ">=20"
