@@ -1,0 +1,22 @@
+{
+  "name": "chatgpt-fullscreen-concept",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Minimal reproduction of the ChatGPT fullscreen composer viewport bug.",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.22.0",
+  "scripts": {
+    "start": "node src/start.js",
+    "test": "node --test",
+    "check": "node --check src/widget.js && node --check src/server.js && node --check src/start.js && node --test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "express": "^5.2.1",
+    "zod": "^4.4.3"
+  }
+}
