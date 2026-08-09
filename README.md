@@ -14,6 +14,7 @@ The widget contains:
 - one read-only MCP tool;
 - one self-contained HTML resource;
 - one button that requests ChatGPT fullscreen mode; and
+- a blue frame showing the exact iframe viewport owned by the MCP application; and
 - a few read-only diagnostics for the iframe and documented host values.
 
 It has no React runtime, authentication, persistence, API calls, external assets, application data, scroll

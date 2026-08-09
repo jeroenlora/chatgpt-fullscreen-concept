@@ -58,6 +58,8 @@ test("serves a self-contained MCP Apps HTML resource", async (t) => {
   assert.equal(contents[0].mimeType, "text/html;profile=mcp-app");
   assert.equal(contents[0].text, WIDGET_HTML);
   assert.match(contents[0].text, /requestDisplayMode\(\{ mode: "fullscreen" \}\)/);
+  assert.match(contents[0].text, /content: "MCP iframe boundary"/);
+  assert.match(contents[0].text, /position: fixed;\s+inset: 0;\s+border: 4px solid #1677ff;/);
   assert.doesNotMatch(contents[0].text, /fetch\(|XMLHttpRequest|WebSocket/);
   assert.doesNotMatch(contents[0].text, /^\s*(?:min-|max-)?height\s*:/im);
   assert.doesNotMatch(contents[0].text, /\b(?:d?vh|svh|lvh)\b/i);

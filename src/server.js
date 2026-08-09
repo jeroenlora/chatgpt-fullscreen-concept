@@ -12,7 +12,7 @@ import { TEMPLATE_URI, WIDGET_HTML } from "./widget.js";
 export function createMcpServer() {
   const server = new McpServer({
     name: "chatgpt-fullscreen-composer-repro",
-    version: "0.1.0",
+    version: "0.1.1",
   });
 
   registerAppResource(

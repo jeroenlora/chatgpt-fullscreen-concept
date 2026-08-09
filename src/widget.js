@@ -1,4 +1,4 @@
-export const TEMPLATE_URI = "ui://chatgpt-fullscreen-concept/composer-repro-v1.html";
+export const TEMPLATE_URI = "ui://chatgpt-fullscreen-concept/composer-repro-v2.html";
 
 // This widget is intentionally plain HTML with no framework, network requests, external
 // assets, viewport-height CSS, or scroll container. The absence of those mechanisms is
@@ -25,6 +25,29 @@ export const WIDGET_HTML = String.raw`<!doctype html>
         padding: 0;
         background: Canvas;
         color: CanvasText;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        border: 4px solid #1677ff;
+        pointer-events: none;
+        z-index: 2147483647;
+      }
+
+      body::after {
+        content: "MCP iframe boundary";
+        position: fixed;
+        top: 8px;
+        right: 8px;
+        border-radius: 4px;
+        padding: 4px 7px;
+        background: #1677ff;
+        color: white;
+        font: 600 12px/1.2 ui-sans-serif, system-ui, sans-serif;
+        pointer-events: none;
+        z-index: 2147483647;
       }
 
       main {
@@ -86,7 +109,8 @@ export const WIDGET_HTML = String.raw`<!doctype html>
       <h1>ChatGPT fullscreen composer reproduction</h1>
       <p>
         This intentionally small widget has no scroll container and no viewport-height CSS.
-        Enter fullscreen, then type in ChatGPT's native composer until it wraps onto a second line.
+        The blue frame marks the exact iframe viewport owned by this MCP application. Enter fullscreen,
+        then type in ChatGPT's native composer until it wraps onto a second line.
       </p>
       <button id="fullscreen" type="button">Enter fullscreen</button>
       <div id="status" role="status" aria-live="polite">Ready.</div>
