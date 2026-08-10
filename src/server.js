@@ -6,13 +6,16 @@ import {
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { z } from "zod";
 
 import { TEMPLATE_URI, WIDGET_HTML } from "./widget.js";
+
+const REPRO_VERSION = "0.3.0";
 
 export function createMcpServer() {
   const server = new McpServer({
     name: "chatgpt-update-model-context-repro",
-    version: "0.2.0",
+    version: REPRO_VERSION,
   });
 
   registerAppResource(
@@ -29,7 +32,10 @@ export function createMcpServer() {
           mimeType: RESOURCE_MIME_TYPE,
           text: WIDGET_HTML,
           _meta: {
-            ui: { prefersBorder: true },
+            ui: {
+              prefersBorder: true,
+              permissions: { clipboardWrite: {} },
+            },
           },
         },
       ],
@@ -71,6 +77,55 @@ export function createMcpServer() {
     }),
   );
 
+  server.registerTool(
+    "report_observed_context",
+    {
+      title: "Report observed model context",
+      description:
+        "Report the exact update-model-context probe fields visible to the model. Call this only when the user " +
+        "asks to report the current probe and the most recent MCP_CONTEXT_PROBE supplies all three arguments. " +
+        "Never infer, substitute, or retrieve missing values.",
+      inputSchema: {
+        trace_id: z.string().min(1).max(100).describe("Exact trace_id from the most recent MCP_CONTEXT_PROBE."),
+        current_test_value: z
+          .string()
+          .min(1)
+          .max(200)
+          .describe("Exact current_test_value from the most recent MCP_CONTEXT_PROBE."),
+        sequence: z
+          .number()
+          .int()
+          .min(1)
+          .max(Number.MAX_SAFE_INTEGER)
+          .describe("Exact sequence from the most recent MCP_CONTEXT_PROBE."),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+      _meta: {
+        ui: { visibility: ["model"] },
+      },
+    },
+    async ({ trace_id, current_test_value, sequence }) => {
+      const observation = {
+        type: "model_context_observation",
+        trace_id,
+        current_test_value,
+        sequence,
+        server_received_at: new Date().toISOString(),
+        server_version: REPRO_VERSION,
+      };
+
+      return {
+        structuredContent: observation,
+        content: [{ type: "text", text: `MODEL_CONTEXT_OBSERVATION ${JSON.stringify(observation)}` }],
+      };
+    },
+  );
+
   return server;
 }
 
@@ -90,7 +145,7 @@ export function createHttpApp(host = process.env.HOST || "127.0.0.1") {
       name: "chatgpt-update-model-context-repro",
       status: "ok",
       mcpEndpoint: "/mcp",
-      version: "0.2.0",
+      version: REPRO_VERSION,
     });
   });
 

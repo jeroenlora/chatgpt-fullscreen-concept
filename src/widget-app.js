@@ -1,14 +1,23 @@
-import { App, PostMessageTransport } from "@modelcontextprotocol/ext-apps/app-with-deps";
+import {
+  App,
+  LATEST_PROTOCOL_VERSION,
+  PostMessageTransport,
+} from "@modelcontextprotocol/ext-apps/app-with-deps";
 
 const testValueInput = document.getElementById("test-value");
 const publishButton = document.getElementById("publish");
 const newValueButton = document.getElementById("new-value");
 const fullscreenButton = document.getElementById("fullscreen");
+const sendMessageButton = document.getElementById("send-message");
+const copyDiagnosticsButton = document.getElementById("copy-diagnostics");
 const status = document.getElementById("status");
 const diagnostics = document.getElementById("diagnostics");
+const testPrompt = document.getElementById("test-prompt").textContent;
 
 let sequence = 0;
-let hostSnapshot = null;
+let latestReport = null;
+let lastAcknowledgedUpdate = null;
+const widgetInstanceId = crypto.randomUUID();
 
 function generateTestValue() {
   return `UPDATED-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
@@ -19,39 +28,72 @@ function showStatus(message, state = "") {
   status.dataset.state = state;
 }
 
+function buildEnvironment(app) {
+  return {
+    reproduction: "ui/update-model-context",
+    reproduction_version: __REPRO_VERSION__,
+    mcp_apps_sdk_version: __MCP_APPS_SDK_VERSION__,
+    mcp_apps_protocol_version: LATEST_PROTOCOL_VERSION,
+    widget_instance_id: widgetInstanceId,
+    host: app.getHostVersion(),
+    host_capabilities: app.getHostCapabilities(),
+    host_context: app.getHostContext(),
+    initial_test_value: "INITIAL-SERVER-VALUE",
+  };
+}
+
+function showReport(app, update = {}) {
+  latestReport = { ...latestReport, ...buildEnvironment(app), ...update };
+  diagnostics.textContent = JSON.stringify(latestReport, null, 2);
+}
+
 function renderHost(app) {
   const host = app.getHostVersion();
   const context = app.getHostContext();
-  const capability = app.getHostCapabilities()?.updateModelContext;
+  const capabilities = app.getHostCapabilities();
+  const contextCapability = capabilities?.updateModelContext;
+  const messageCapability = capabilities?.message;
 
   document.getElementById("host").textContent = host ? `${host.name} ${host.version}` : "not provided";
   document.getElementById("display-mode").textContent = context?.displayMode ?? "not provided";
-  document.getElementById("capability").textContent = capability ? "advertised" : "not advertised";
-  publishButton.disabled = !capability;
+  document.getElementById("context-capability").textContent = contextCapability ? "advertised" : "not advertised";
+  document.getElementById("message-capability").textContent = messageCapability ? "advertised" : "not advertised";
+  document.getElementById("repro-version").textContent = __REPRO_VERSION__;
+  document.getElementById("sdk-version").textContent = __MCP_APPS_SDK_VERSION__;
+  document.getElementById("protocol-version").textContent = LATEST_PROTOCOL_VERSION;
+  document.getElementById("widget-instance").textContent = widgetInstanceId;
+  publishButton.disabled = !contextCapability;
+  sendMessageButton.disabled =
+    !messageCapability ||
+    !lastAcknowledgedUpdate ||
+    lastAcknowledgedUpdate.ui_message_sent ||
+    testValueInput.value.trim() !== lastAcknowledgedUpdate.current_test_value;
   fullscreenButton.disabled = !context?.availableDisplayModes?.includes("fullscreen");
 }
 
 async function main() {
   const app = new App(
-    { name: "update-model-context-repro-view", version: "0.2.0" },
+    { name: "update-model-context-repro-view", version: __REPRO_VERSION__ },
     { availableDisplayModes: ["inline", "fullscreen"] },
     { autoResize: true, strict: true },
   );
 
-  app.onhostcontextchanged = () => renderHost(app);
+  app.onhostcontextchanged = () => {
+    renderHost(app);
+    showReport(app);
+  };
   await app.connect(new PostMessageTransport(window.parent, window.parent));
 
   testValueInput.value = generateTestValue();
-  hostSnapshot = {
-    host: app.getHostVersion(),
-    capabilities: app.getHostCapabilities(),
-  };
-  diagnostics.textContent = JSON.stringify(hostSnapshot, null, 2);
+  showReport(app, { connected_at: new Date().toISOString() });
   renderHost(app);
-  showStatus("Connected. Publish the replacement value, then ask ChatGPT the test question.");
+  showStatus("Connected. Publish the replacement value, then run one comparison path.");
+
+  testValueInput.addEventListener("input", () => renderHost(app));
 
   newValueButton.addEventListener("click", () => {
     testValueInput.value = generateTestValue();
+    renderHost(app);
     testValueInput.focus();
   });
 
@@ -60,8 +102,47 @@ async function main() {
     try {
       await app.requestDisplayMode({ mode: "fullscreen" });
       renderHost(app);
+      showReport(app, { display_mode_requested_at: new Date().toISOString() });
     } catch (error) {
       showStatus(`Fullscreen request failed: ${String(error)}`, "error");
+      renderHost(app);
+    }
+  });
+
+  copyDiagnosticsButton.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(latestReport, null, 2));
+      showStatus("Diagnostic report copied to the clipboard.", "success");
+    } catch (error) {
+      showStatus(`Copy failed: ${String(error)}`, "error");
+    }
+  });
+
+  sendMessageButton.addEventListener("click", async () => {
+    sendMessageButton.disabled = true;
+    const sentAt = new Date().toISOString();
+    lastAcknowledgedUpdate.ui_message_sent = true;
+    showReport(app, { ui_message: { prompt: testPrompt, sent_at: sentAt } });
+    showStatus("Sending the test prompt through ui/message...");
+
+    try {
+      const result = await app.sendMessage({
+        role: "user",
+        content: [{ type: "text", text: testPrompt }],
+      });
+      showReport(app, {
+        ui_message: {
+          prompt: testPrompt,
+          sent_at: sentAt,
+          acknowledgement: result,
+          acknowledged_at: new Date().toISOString(),
+        },
+      });
+      showStatus("ui/message was acknowledged. Compare the resulting tool observation.", "success");
+    } catch (error) {
+      lastAcknowledgedUpdate.ui_message_sent = false;
+      showReport(app, { ui_message: { prompt: testPrompt, sent_at: sentAt, error: String(error) } });
+      showStatus(`ui/message failed: ${String(error)}`, "error");
       renderHost(app);
     }
   });
@@ -75,19 +156,21 @@ async function main() {
     }
 
     sequence += 1;
+    const traceId = crypto.randomUUID();
     const publishedAt = new Date().toISOString();
     const request = {
       content: [
         {
           type: "text",
           text:
-            `MCP_CONTEXT_PROBE: The current test value is "${value}". ` +
-            `It replaces "INITIAL-SERVER-VALUE". If the user asks for the current test value ` +
-            `on their next turn, reply with exactly "${value}".`,
+            `MCP_CONTEXT_PROBE: trace_id="${traceId}", current_test_value="${value}", sequence=${sequence}. ` +
+            `This replaces "INITIAL-SERVER-VALUE". On the next user turn, when asked to report the current probe, ` +
+            `call report_observed_context with exactly this trace_id, current_test_value, and sequence.`,
         },
       ],
       structuredContent: {
         type: "update_model_context_reproduction",
+        trace_id: traceId,
         current_test_value: value,
         replaces: "INITIAL-SERVER-VALUE",
         sequence,
@@ -97,24 +180,39 @@ async function main() {
 
     publishButton.disabled = true;
     showStatus("Sending ui/update-model-context...");
+    document.getElementById("last-trace").textContent = traceId;
     document.getElementById("last-value").textContent = value;
-    diagnostics.textContent = JSON.stringify({ ...hostSnapshot, request }, null, 2);
+    showReport(app, { update_model_context: { request, sent_at: publishedAt }, ui_message: null });
+    const requestStartedAt = performance.now();
 
     try {
       const result = await app.updateModelContext(request);
       const acknowledgedAt = new Date().toISOString();
+      const acknowledgementLatencyMs = Math.round((performance.now() - requestStartedAt) * 10) / 10;
+      lastAcknowledgedUpdate = {
+        trace_id: traceId,
+        current_test_value: value,
+        sequence,
+        ui_message_sent: false,
+      };
       document.getElementById("last-ack").textContent = acknowledgedAt;
-      diagnostics.textContent = JSON.stringify(
-        { ...hostSnapshot, request, acknowledgement: result, acknowledged_at: acknowledgedAt },
-        null,
-        2,
-      );
-      showStatus(`ACK received for ${value}. Now ask ChatGPT the test question.`, "success");
+      document.getElementById("ack-latency").textContent = `${acknowledgementLatencyMs} ms`;
+      showReport(app, {
+        update_model_context: {
+          request,
+          sent_at: publishedAt,
+          acknowledgement: result,
+          acknowledged_at: acknowledgedAt,
+          acknowledgement_latency_ms: acknowledgementLatencyMs,
+        },
+      });
+      showStatus(`ACK received for ${value}. Run the manual or ui/message comparison.`, "success");
     } catch (error) {
-      diagnostics.textContent = JSON.stringify({ ...hostSnapshot, request, error: String(error) }, null, 2);
+      lastAcknowledgedUpdate = null;
+      showReport(app, { update_model_context: { request, sent_at: publishedAt, error: String(error) } });
       showStatus(`Context update failed: ${String(error)}`, "error");
     } finally {
-      publishButton.disabled = false;
+      renderHost(app);
     }
   });
 }

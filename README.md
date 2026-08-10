@@ -3,7 +3,7 @@
 This repository is a minimal, non-sensitive reproduction of ChatGPT acknowledging an MCP Apps
 `ui/update-model-context` request without reliably making that context available to the model on the next user turn.
 
-The server exposes one read-only tool and one self-contained HTML resource. There is no authentication, persistence,
+The server exposes two read-only tools and one self-contained HTML resource. There is no authentication, persistence,
 application API, external asset, CDN, or proprietary `window.openai` communication path.
 
 ## What the test isolates
@@ -22,7 +22,12 @@ UPDATED-12AB34CD
 ```
 
 The request contains both a text content block and equivalent `structuredContent`. The widget displays the request,
-the host's advertised capability, and the successful acknowledgement returned by ChatGPT.
+the host's advertised capability, and the successful acknowledgement returned by ChatGPT. Every publication includes
+a unique trace ID, sequence number, timestamps, and ACK latency.
+
+The second tool, `report_observed_context`, accepts the exact trace ID, value, and sequence that the model believes it
+received. It does not read or persist app state; it only echoes the model's arguments with a server timestamp. This
+makes the model's observation visible as a structured tool call instead of relying on a prose answer.
 
 ## Requirements
 
@@ -61,17 +66,27 @@ https://YOUR-PROJECT.vercel.app/mcp
 4. Do not refresh the ChatGPT page after the widget is rendered.
 5. Optionally click **Enter fullscreen** to match a fullscreen MCP workspace.
 6. Click **Publish through updateModelContext**.
-7. Confirm that the widget reports `ACK received` and note the generated `UPDATED-...` value.
-8. In ChatGPT's normal composer, type:
+7. Confirm that the widget reports `ACK received` and note the generated `UPDATED-...` value and trace ID.
+8. For the manual-composer path, type this exact prompt in ChatGPT's normal composer:
 
    ```text
-   What is the current test value? Reply with only the value.
+   Report the current model-context probe by calling report_observed_context with the exact trace_id,
+   current_test_value, and sequence supplied by the widget.
    ```
 
-Expected: ChatGPT returns the exact `UPDATED-...` value.
+Expected: ChatGPT calls `report_observed_context` with the exact trace ID, `UPDATED-...` value, and sequence shown in
+the widget. The tool result echoes those arguments as `MODEL_CONTEXT_OBSERVATION`.
 
-Failure: ChatGPT returns `INITIAL-SERVER-VALUE`, says it cannot see the value, or gives another stale/missing answer
-despite the successful acknowledgement.
+Failure: ChatGPT cannot supply the required arguments, uses `INITIAL-SERVER-VALUE`, reopens the render tool, or gives
+another stale/missing response despite the successful acknowledgement.
+
+For the app-generated comparison, publish a fresh value and click **Send test prompt through ui/message** instead of
+typing the prompt. This uses the official `ui/message` path and reveals whether delivery differs between app-originated
+and ordinary composer turns.
+
+Expand **Diagnostic report** and click **Copy diagnostic report** to capture the exact request, ACK, timestamps, host
+information, capabilities, display mode, SDK/protocol versions, widget instance ID, and trace ID. The report contains
+no authorization headers or application data.
 
 For lifecycle comparison, repeat once after a full ChatGPT page refresh. Public developer reports indicate that
 rehydrated widgets can behave differently from widgets rendered live in the current turn.
@@ -82,9 +97,9 @@ rehydrated widgets can behave differently from widgets rendered live in the curr
 pnpm check
 ```
 
-The tests verify that the server exposes exactly one tool, returns the deliberate initial value, serves a
-self-contained widget, and that the widget source uses the official MCP Apps bridge without `window.openai` or raw
-`postMessage` calls.
+The tests verify that the server exposes exactly the render and observation tools, echoes model observations, returns
+the deliberate initial value, serves a self-contained widget, and uses the official MCP Apps bridge without
+`window.openai` or raw `postMessage` calls.
 
 ## Related report
 

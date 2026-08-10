@@ -1,6 +1,11 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 
 import { build } from "esbuild";
+
+const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+const sdkPackageJson = JSON.parse(
+  await readFile(new URL("../node_modules/@modelcontextprotocol/ext-apps/package.json", import.meta.url), "utf8"),
+);
 
 const result = await build({
   entryPoints: ["src/widget-app.js"],
@@ -9,6 +14,10 @@ const result = await build({
   platform: "browser",
   target: "es2022",
   minify: true,
+  define: {
+    __MCP_APPS_SDK_VERSION__: JSON.stringify(sdkPackageJson.version),
+    __REPRO_VERSION__: JSON.stringify(packageJson.version),
+  },
   write: false,
 });
 
