@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -23,7 +24,7 @@ test("default-exports the Express app for Vercel", () => {
   assert.equal(typeof vercelApp, "function");
 });
 
-test("advertises one read-only render tool with the widget resource", async (t) => {
+test("advertises one read-only render tool with an initial stale value", async (t) => {
   const { client, server } = await connectTestClient();
   t.after(async () => {
     await client.close();
@@ -32,22 +33,31 @@ test("advertises one read-only render tool with the widget resource", async (t) 
 
   const { tools } = await client.listTools();
   assert.equal(tools.length, 1);
-  assert.equal(tools[0].name, "show_fullscreen_composer_repro");
+  assert.equal(tools[0].name, "show_update_model_context_repro");
   assert.equal(tools[0].annotations.readOnlyHint, true);
   assert.equal(tools[0]._meta.ui.resourceUri, TEMPLATE_URI);
-  assert.equal(tools[0]._meta["openai/outputTemplate"], TEMPLATE_URI);
+  assert.equal(tools[0]._meta["openai/outputTemplate"], undefined);
 
   const result = await client.callTool({ name: tools[0].name, arguments: {} });
-  assert.deepEqual(result.structuredContent, { reproduction: "fullscreen-composer" });
+  assert.deepEqual(result.structuredContent, {
+    reproduction: "update-model-context",
+    initial_test_value: "INITIAL-SERVER-VALUE",
+  });
+  assert.match(result.content[0].text, /INITIAL-SERVER-VALUE/);
   assert.equal(result.isError, undefined);
 });
 
-test("serves a self-contained MCP Apps HTML resource", async (t) => {
+test("serves a self-contained widget using the standard MCP Apps bridge", async (t) => {
   const { client, server } = await connectTestClient();
   t.after(async () => {
     await client.close();
     await server.close();
   });
+
+  const widgetSource = await readFile(new URL("../src/widget-app.js", import.meta.url), "utf8");
+  assert.match(widgetSource, /App, PostMessageTransport/);
+  assert.match(widgetSource, /app\.updateModelContext\(request\)/);
+  assert.doesNotMatch(widgetSource, /window\.openai|\.postMessage\(/);
 
   const { resources } = await client.listResources();
   assert.equal(resources.length, 1);
@@ -57,12 +67,11 @@ test("serves a self-contained MCP Apps HTML resource", async (t) => {
   assert.equal(contents.length, 1);
   assert.equal(contents[0].mimeType, "text/html;profile=mcp-app");
   assert.equal(contents[0].text, WIDGET_HTML);
-  assert.match(contents[0].text, /requestDisplayMode\(\{ mode: "fullscreen" \}\)/);
-  assert.match(contents[0].text, /content: "MCP iframe boundary"/);
-  assert.match(contents[0].text, /position: fixed;\s+inset: 0;\s+border: 4px solid #1677ff;/);
-  assert.doesNotMatch(contents[0].text, /fetch\(|XMLHttpRequest|WebSocket/);
-  assert.doesNotMatch(contents[0].text, /^\s*(?:min-|max-)?height\s*:/im);
-  assert.doesNotMatch(contents[0].text, /\b(?:d?vh|svh|lvh)\b/i);
+  assert.match(contents[0].text, /ui\/update-model-context/);
+  assert.match(contents[0].text, /MCP_CONTEXT_PROBE/);
+  assert.match(contents[0].text, /INITIAL-SERVER-VALUE/);
+  assert.match(contents[0].text, /What is the current test value\?/);
+  assert.doesNotMatch(contents[0].text, /<(?:script|link|img)[^>]+(?:src|href)=/i);
 });
 
 test("accepts MCP initialization over Streamable HTTP", async (t) => {
@@ -79,9 +88,10 @@ test("accepts MCP initialization over Streamable HTTP", async (t) => {
   const healthResponse = await fetch(`${baseUrl}/`);
   assert.equal(healthResponse.status, 200);
   assert.deepEqual(await healthResponse.json(), {
-    name: "chatgpt-fullscreen-composer-repro",
+    name: "chatgpt-update-model-context-repro",
     status: "ok",
     mcpEndpoint: "/mcp",
+    version: "0.2.0",
   });
 
   const initializeResponse = await fetch(`${baseUrl}/mcp`, {
@@ -103,5 +113,5 @@ test("accepts MCP initialization over Streamable HTTP", async (t) => {
   });
 
   assert.equal(initializeResponse.status, 200);
-  assert.match(await initializeResponse.text(), /chatgpt-fullscreen-composer-repro/);
+  assert.match(await initializeResponse.text(), /chatgpt-update-model-context-repro/);
 });

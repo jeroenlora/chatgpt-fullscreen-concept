@@ -11,16 +11,16 @@ import { TEMPLATE_URI, WIDGET_HTML } from "./widget.js";
 
 export function createMcpServer() {
   const server = new McpServer({
-    name: "chatgpt-fullscreen-composer-repro",
-    version: "0.1.1",
+    name: "chatgpt-update-model-context-repro",
+    version: "0.2.0",
   });
 
   registerAppResource(
     server,
-    "ChatGPT fullscreen composer reproduction",
+    "ChatGPT updateModelContext reproduction",
     TEMPLATE_URI,
     {
-      description: "A static, dependency-free widget used to reproduce a ChatGPT fullscreen composer layout bug.",
+      description: "A self-contained MCP Apps widget that reproduces stale or missing updateModelContext delivery.",
     },
     async () => ({
       contents: [
@@ -29,10 +29,7 @@ export function createMcpServer() {
           mimeType: RESOURCE_MIME_TYPE,
           text: WIDGET_HTML,
           _meta: {
-            ui: { prefersBorder: false },
-            "openai/widgetDescription":
-              "Minimal reproduction surface for a ChatGPT fullscreen composer viewport bug.",
-            "openai/widgetPrefersBorder": false,
+            ui: { prefersBorder: true },
           },
         },
       ],
@@ -41,12 +38,12 @@ export function createMcpServer() {
 
   registerAppTool(
     server,
-    "show_fullscreen_composer_repro",
+    "show_update_model_context_repro",
     {
-      title: "Show fullscreen composer reproduction",
+      title: "Show updateModelContext reproduction",
       description:
-        "Render the minimal widget used to reproduce the ChatGPT fullscreen composer viewport bug. " +
-        "Call this tool whenever the user asks to open, show, or test the fullscreen composer reproduction.",
+        "Render the minimal MCP Apps widget used to test whether ui/update-model-context reaches the model. " +
+        "Call this tool whenever the user asks to open, show, or run the updateModelContext reproduction.",
       inputSchema: {},
       annotations: {
         readOnlyHint: true,
@@ -56,17 +53,19 @@ export function createMcpServer() {
       },
       _meta: {
         ui: { resourceUri: TEMPLATE_URI },
-        "openai/outputTemplate": TEMPLATE_URI,
-        "openai/toolInvocation/invoking": "Opening the reproduction…",
-        "openai/toolInvocation/invoked": "Reproduction ready.",
       },
     },
     async () => ({
-      structuredContent: { reproduction: "fullscreen-composer" },
+      structuredContent: {
+        reproduction: "update-model-context",
+        initial_test_value: "INITIAL-SERVER-VALUE",
+      },
       content: [
         {
           type: "text",
-          text: "The minimal fullscreen composer reproduction is ready. Use its button to enter fullscreen.",
+          text:
+            "The updateModelContext reproduction is ready. The initial test value is " +
+            '"INITIAL-SERVER-VALUE". The widget lets the user publish a replacement value.',
         },
       ],
     }),
@@ -88,9 +87,10 @@ export function createHttpApp(host = process.env.HOST || "127.0.0.1") {
 
   app.get("/", (_req, res) => {
     res.json({
-      name: "chatgpt-fullscreen-composer-repro",
+      name: "chatgpt-update-model-context-repro",
       status: "ok",
       mcpEndpoint: "/mcp",
+      version: "0.2.0",
     });
   });
 
@@ -146,7 +146,7 @@ export function startServer() {
       return;
     }
 
-    console.log(`Fullscreen composer reproduction listening at http://${host}:${port}/mcp`);
+    console.log(`updateModelContext reproduction listening at http://${host}:${port}/mcp`);
   });
 }
 
