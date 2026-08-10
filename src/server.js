@@ -10,7 +10,7 @@ import { z } from "zod";
 
 import { TEMPLATE_URI, WIDGET_HTML } from "./widget.js";
 
-const REPRO_VERSION = "0.3.0";
+const REPRO_VERSION = "0.4.0";
 
 export function createMcpServer() {
   const server = new McpServer({

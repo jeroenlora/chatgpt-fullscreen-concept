@@ -58,7 +58,7 @@ test("advertises the render and model-observation tools", async (t) => {
   assert.equal(observation.structuredContent.trace_id, "trace-test");
   assert.equal(observation.structuredContent.current_test_value, "UPDATED-TEST");
   assert.equal(observation.structuredContent.sequence, 3);
-  assert.equal(observation.structuredContent.server_version, "0.3.0");
+  assert.equal(observation.structuredContent.server_version, "0.4.0");
   assert.match(observation.structuredContent.server_received_at, /^\d{4}-\d{2}-\d{2}T/);
   assert.match(observation.content[0].text, /MODEL_CONTEXT_OBSERVATION/);
 });
@@ -75,6 +75,8 @@ test("serves a self-contained widget using the standard MCP Apps bridge", async 
   assert.match(widgetSource, /\bPostMessageTransport\b/);
   assert.match(widgetSource, /app\.updateModelContext\(request\)/);
   assert.match(widgetSource, /app\.sendMessage\(/);
+  assert.match(widgetSource, /explicit_values_ui_message/);
+  assert.match(widgetSource, /fields are supplied directly in this ui\/message positive control/);
   assert.match(widgetSource, /navigator\.clipboard\.writeText/);
   assert.doesNotMatch(widgetSource, /window\.openai|\.postMessage\(/);
 
@@ -91,7 +93,8 @@ test("serves a self-contained widget using the standard MCP Apps bridge", async 
   assert.match(contents[0].text, /MCP_CONTEXT_PROBE/);
   assert.match(contents[0].text, /INITIAL-SERVER-VALUE/);
   assert.match(contents[0].text, /report_observed_context/);
-  assert.match(contents[0].text, /Send test prompt through ui\/message/);
+  assert.match(contents[0].text, /Send context-dependent ui\/message/);
+  assert.match(contents[0].text, /Send explicit-values positive control/);
   assert.doesNotMatch(contents[0].text, /<(?:script|link|img)[^>]+(?:src|href)=/i);
 });
 
@@ -112,7 +115,7 @@ test("accepts MCP initialization over Streamable HTTP", async (t) => {
     name: "chatgpt-update-model-context-repro",
     status: "ok",
     mcpEndpoint: "/mcp",
-    version: "0.3.0",
+    version: "0.4.0",
   });
 
   const initializeResponse = await fetch(`${baseUrl}/mcp`, {

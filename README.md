@@ -80,9 +80,14 @@ the widget. The tool result echoes those arguments as `MODEL_CONTEXT_OBSERVATION
 Failure: ChatGPT cannot supply the required arguments, uses `INITIAL-SERVER-VALUE`, reopens the render tool, or gives
 another stale/missing response despite the successful acknowledgement.
 
-For the app-generated comparison, publish a fresh value and click **Send test prompt through ui/message** instead of
+For the app-generated comparison, publish a fresh value and click **1. Send context-dependent ui/message** instead of
 typing the prompt. This uses the official `ui/message` path and reveals whether delivery differs between app-originated
 and ordinary composer turns.
+
+After that response finishes, click **2. Send explicit-values positive control** without publishing again. This sends
+the same trace ID, value, and sequence directly inside `ui/message`. If ChatGPT now calls `report_observed_context`,
+the positive control proves that `ui/message`, tool discovery, tool invocation, and the observation contract all work;
+the missing link is specifically the separately acknowledged `ui/update-model-context` payload.
 
 Expand **Diagnostic report** and click **Copy diagnostic report** to capture the exact request, ACK, timestamps, host
 information, capabilities, display mode, SDK/protocol versions, widget instance ID, and trace ID. The report contains

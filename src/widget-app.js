@@ -9,6 +9,7 @@ const publishButton = document.getElementById("publish");
 const newValueButton = document.getElementById("new-value");
 const fullscreenButton = document.getElementById("fullscreen");
 const sendMessageButton = document.getElementById("send-message");
+const sendExplicitMessageButton = document.getElementById("send-explicit-message");
 const copyDiagnosticsButton = document.getElementById("copy-diagnostics");
 const status = document.getElementById("status");
 const diagnostics = document.getElementById("diagnostics");
@@ -66,7 +67,13 @@ function renderHost(app) {
   sendMessageButton.disabled =
     !messageCapability ||
     !lastAcknowledgedUpdate ||
-    lastAcknowledgedUpdate.ui_message_sent ||
+    lastAcknowledgedUpdate.context_dependent_ui_message_sent ||
+    testValueInput.value.trim() !== lastAcknowledgedUpdate.current_test_value;
+  sendExplicitMessageButton.disabled =
+    !messageCapability ||
+    !lastAcknowledgedUpdate ||
+    !lastAcknowledgedUpdate.context_dependent_ui_message_sent ||
+    lastAcknowledgedUpdate.explicit_ui_message_sent ||
     testValueInput.value.trim() !== lastAcknowledgedUpdate.current_test_value;
   fullscreenButton.disabled = !context?.availableDisplayModes?.includes("fullscreen");
 }
@@ -118,33 +125,58 @@ async function main() {
     }
   });
 
-  sendMessageButton.addEventListener("click", async () => {
-    sendMessageButton.disabled = true;
+  async function sendComparisonMessage({ button, diagnosticKey, prompt, sentFlag }) {
+    button.disabled = true;
     const sentAt = new Date().toISOString();
-    lastAcknowledgedUpdate.ui_message_sent = true;
-    showReport(app, { ui_message: { prompt: testPrompt, sent_at: sentAt } });
-    showStatus("Sending the test prompt through ui/message...");
+    lastAcknowledgedUpdate[sentFlag] = true;
+    showReport(app, { [diagnosticKey]: { prompt, sent_at: sentAt } });
+    showStatus(`Sending ${diagnosticKey.replaceAll("_", " ")}...`);
 
     try {
       const result = await app.sendMessage({
         role: "user",
-        content: [{ type: "text", text: testPrompt }],
+        content: [{ type: "text", text: prompt }],
       });
       showReport(app, {
-        ui_message: {
-          prompt: testPrompt,
+        [diagnosticKey]: {
+          prompt,
           sent_at: sentAt,
           acknowledgement: result,
           acknowledged_at: new Date().toISOString(),
         },
       });
-      showStatus("ui/message was acknowledged. Compare the resulting tool observation.", "success");
+      showStatus(`${diagnosticKey.replaceAll("_", " ")} was acknowledged. Compare the tool observation.`, "success");
+      renderHost(app);
     } catch (error) {
-      lastAcknowledgedUpdate.ui_message_sent = false;
-      showReport(app, { ui_message: { prompt: testPrompt, sent_at: sentAt, error: String(error) } });
-      showStatus(`ui/message failed: ${String(error)}`, "error");
+      lastAcknowledgedUpdate[sentFlag] = false;
+      showReport(app, { [diagnosticKey]: { prompt, sent_at: sentAt, error: String(error) } });
+      showStatus(`${diagnosticKey.replaceAll("_", " ")} failed: ${String(error)}`, "error");
       renderHost(app);
     }
+  }
+
+  sendMessageButton.addEventListener("click", async () => {
+    await sendComparisonMessage({
+      button: sendMessageButton,
+      diagnosticKey: "context_dependent_ui_message",
+      prompt: testPrompt,
+      sentFlag: "context_dependent_ui_message_sent",
+    });
+  });
+
+  sendExplicitMessageButton.addEventListener("click", async () => {
+    const { trace_id: traceId, current_test_value: value, sequence: currentSequence } = lastAcknowledgedUpdate;
+    const explicitPrompt =
+      `MCP_CONTEXT_PROBE: trace_id="${traceId}", current_test_value="${value}", sequence=${currentSequence}. ` +
+      "These fields are supplied directly in this ui/message positive control. " +
+      "Call report_observed_context with exactly this trace_id, current_test_value, and sequence.";
+
+    await sendComparisonMessage({
+      button: sendExplicitMessageButton,
+      diagnosticKey: "explicit_values_ui_message",
+      prompt: explicitPrompt,
+      sentFlag: "explicit_ui_message_sent",
+    });
   });
 
   publishButton.addEventListener("click", async () => {
@@ -182,7 +214,12 @@ async function main() {
     showStatus("Sending ui/update-model-context...");
     document.getElementById("last-trace").textContent = traceId;
     document.getElementById("last-value").textContent = value;
-    showReport(app, { update_model_context: { request, sent_at: publishedAt }, ui_message: null });
+    document.getElementById("last-sequence").textContent = String(sequence);
+    showReport(app, {
+      update_model_context: { request, sent_at: publishedAt },
+      context_dependent_ui_message: null,
+      explicit_values_ui_message: null,
+    });
     const requestStartedAt = performance.now();
 
     try {
@@ -193,7 +230,8 @@ async function main() {
         trace_id: traceId,
         current_test_value: value,
         sequence,
-        ui_message_sent: false,
+        context_dependent_ui_message_sent: false,
+        explicit_ui_message_sent: false,
       };
       document.getElementById("last-ack").textContent = acknowledgedAt;
       document.getElementById("ack-latency").textContent = `${acknowledgementLatencyMs} ms`;

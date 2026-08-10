@@ -1,6 +1,6 @@
 import { WIDGET_SCRIPT } from "./widget-bundle.generated.js";
 
-export const TEMPLATE_URI = "ui://update-model-context-repro/probe-v2.html";
+export const TEMPLATE_URI = "ui://update-model-context-repro/probe-v3.html";
 
 export const WIDGET_HTML = String.raw`<!doctype html>
 <html lang="en">
@@ -42,7 +42,7 @@ export const WIDGET_HTML = String.raw`<!doctype html>
       <h1><code>ui/update-model-context</code> reproduction</h1>
       <p>
         The tool result told ChatGPT that the initial value is <code>INITIAL-SERVER-VALUE</code>.
-        Publish the replacement below, then manually ask ChatGPT for the current test value.
+        Publish the replacement below, then compare the manual and app-message observation paths.
       </p>
 
       <label for="test-value">Replacement test value</label>
@@ -67,6 +67,7 @@ export const WIDGET_HTML = String.raw`<!doctype html>
         <dt>Widget instance</dt><dd id="widget-instance">unknown</dd>
         <dt>Last trace</dt><dd id="last-trace">none</dd>
         <dt>Last value</dt><dd id="last-value">none</dd>
+        <dt>Last sequence</dt><dd id="last-sequence">none</dd>
         <dt>Last ACK</dt><dd id="last-ack">none</dd>
         <dt>ACK latency</dt><dd id="ack-latency">none</dd>
       </dl>
@@ -78,9 +79,15 @@ export const WIDGET_HTML = String.raw`<!doctype html>
       </section>
 
       <section class="test-step">
-        <h2>App-message comparison</h2>
-        <p>Publish a fresh value first, then let the widget send that same prompt through the standard <code>ui/message</code> path.</p>
-        <button id="send-message" type="button" disabled>Send test prompt through ui/message</button>
+        <h2>App-message comparisons</h2>
+        <p>
+          First send only the test instruction. It depends on the preceding context update. Then send the positive
+          control, which includes the exact probe fields directly in <code>ui/message</code>.
+        </p>
+        <div class="actions">
+          <button id="send-message" type="button" disabled>1. Send context-dependent ui/message</button>
+          <button id="send-explicit-message" type="button" disabled>2. Send explicit-values positive control</button>
+        </div>
       </section>
 
       <details>
